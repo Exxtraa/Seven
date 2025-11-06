@@ -1,5 +1,7 @@
-import React from "react";
+import { React, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { supabase } from "../lib/supabaseClient";
+
 import {
   ArrowRight,
   Mail,
@@ -15,6 +17,25 @@ import {
 
 export default function LandingPage() {
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const fetchStars = async () => {
+      try {
+        const res = await fetch("https://api.github.com/repos/Exxtraa/Seven");
+        const data = await res.json();
+        document.getElementById("starCount").textContent =
+          data.stargazers_count;
+      } catch (err) {
+        console.error("Error fetching GitHub stars:", err);
+      }
+    };
+
+    fetchStars();
+    // refresh every 10 mins
+    const interval = setInterval(fetchStars, 600000);
+    return () => clearInterval(interval);
+  }, []);
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950">
       {/* Navigation */}
@@ -46,7 +67,7 @@ export default function LandingPage() {
 
               {/* GitHub Star Button */}
               <a
-                href="https://github.com/yourusername/yourrepo"
+                href="https://github.com/Exxtraa/Seven"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center gap-2 px-4 py-2 bg-slate-800/50 hover:bg-slate-700/50 border border-slate-700/50 rounded-full text-slate-300 hover:text-white transition-all duration-200"
@@ -66,11 +87,28 @@ export default function LandingPage() {
                 >
                   <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
                 </svg>
-                <span className="font-semibold">10.00+</span>
+
+                {/* Live Star Count */}
+                <span id="starCount" className="font-semibold">
+                  ...
+                </span>
               </a>
 
               <button
-                onClick={() => navigate("/signup")}
+                type="button"
+                onClick={async () => {
+                  try {
+                    const { error } = await supabase.auth.signInWithOAuth({
+                      provider: "google",
+                      options: {
+                        redirectTo: `${window.location.origin}/dashboard`,
+                      },
+                    });
+                    if (error) throw error;
+                  } catch (err) {
+                    console.error("Google Auth Error:", err.message);
+                  }
+                }}
                 className="px-5 py-2 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-full transition-all duration-200 font-medium shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 text-sm"
               >
                 Get Started
@@ -244,7 +282,7 @@ export default function LandingPage() {
                     fontSize="24"
                     fontWeight="bold"
                   >
-                  OVERLAYED 
+                    OVERLAYED
                   </text>
                 </svg>
               </div>
@@ -349,7 +387,7 @@ export default function LandingPage() {
                     fontWeight="bold"
                     fontStyle="italic"
                   >
-                     SOFT TECH
+                    SOFT TECH
                   </text>
                 </svg>
               </div>
@@ -621,7 +659,7 @@ export default function LandingPage() {
           <div className="grid md:grid-cols-4 gap-6">
             {[
               {
-                num: "1K+",
+                num: "100+",
                 label: "Emails Sent Daily",
                 icon: <Mail size={20} />,
               },
@@ -791,16 +829,27 @@ export default function LandingPage() {
             Join thousands of professionals already using Seven to land their
             dream opportunities.
           </p>
-          <a
-            href="/auth/signup"
+
+          <button
+            type="button"
+            onClick={async () => {
+              try {
+                const { error } = await supabase.auth.signInWithOAuth({
+                  provider: "google",
+                  options: {
+                    redirectTo: `${window.location.origin}/dashboard`,
+                  },
+                });
+                if (error) throw error;
+              } catch (err) {
+                console.error("Google Auth Error:", err.message);
+              }
+            }}
             className="group inline-flex px-8 py-3.5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-full font-semibold transition-all duration-200 text-sm items-center gap-2 shadow-xl shadow-blue-500/25 hover:shadow-blue-500/40 hover:scale-105"
           >
             Get Started Free
-            <ArrowRight
-              size={16}
-              className="group-hover:translate-x-1 transition-transform"
-            />
-          </a>
+          </button>
+
           <p className="text-slate-400 text-xs mt-5">
             No credit card required • 14-day free trial
           </p>
@@ -925,7 +974,7 @@ export default function LandingPage() {
                 </svg>
               </a>
               <a
-                href="#"
+                href="https://github.com/Exxtraa/Seven"
                 className="text-slate-400 hover:text-white transition-colors"
               >
                 <span className="sr-only">GitHub</span>
@@ -941,7 +990,6 @@ export default function LandingPage() {
                   />
                 </svg>
               </a>
-              
             </div>
           </div>
         </div>
