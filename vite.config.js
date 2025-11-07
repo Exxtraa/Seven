@@ -7,9 +7,9 @@ export default defineConfig({
   plugins: [
     react({
       babel: {
-        plugins: ['babel-plugin-react-compiler'], // ✅ only babel plugins here
+        plugins: ['babel-plugin-react-compiler'], 
       },
     }),
-    tailwindcss(), // ✅ keep Tailwind as a separate Vite plugin
+    tailwindcss(), 
   ],
 })

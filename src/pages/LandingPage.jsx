@@ -1,6 +1,6 @@
 import { React, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "../lib/supabaseClient";
+import { supabase } from "../supabaseClient";
 
 import {
   ArrowRight,
@@ -42,9 +42,13 @@ export default function LandingPage() {
       <nav className="sticky top-7 z-50 px-6">
         <div className="max-w-fit mx-auto bg-slate-800/30 border border-slate-700/50 rounded-full backdrop-blur-xl shadow-lg">
           <div className="px-6 py-3 flex justify-between items-center gap-90">
-            <div className="text-2xl font-bold text-white flex items-center gap-2">
-              Seven
+            <div className="text-2xl font-bold text-white flex flex-col items-center leading-none">
+              <span>Seven</span>
+              <span className="text-[9px] font-normal text-blue-400 mt-0.5 tracking-wide">
+                beta
+              </span>
             </div>
+
             <div className="hidden md:flex gap-6 items-center text-sm">
               <a
                 href="#features"
@@ -277,7 +281,8 @@ export default function LandingPage() {
           {/* Header */}
           <div className="text-center mb-12">
             <p className="text-slate-500 text-xl max-w-2xl mx-auto">
-            *Companies of all sizes trust SEVEN to deliver their most important emails.
+              *Companies of all sizes trust SEVEN to deliver their most
+              important emails.
             </p>
           </div>
 
@@ -864,7 +869,7 @@ export default function LandingPage() {
           </button>
 
           <p className="text-slate-400 text-xs mt-5">
-            No credit card required • 14-day free trial
+            No credit card required • Cancel anytime
           </p>
 
           {/* White Divider Line */}
@@ -880,8 +885,8 @@ export default function LandingPage() {
                     Seven
                   </div>
                   <p className="text-slate-400 text-xs leading-relaxed">
-                   Send cold emails at scaleee . Get more opportunity, land more
-                    opportunities .
+                    Send cold emails at scaleee . Get more opportunity, land
+                    more opportunities .
                   </p>
                 </div>
 
