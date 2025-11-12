@@ -1,186 +1,447 @@
 import React, { useEffect, useState } from "react";
 import { supabase } from "../supabaseClient";
+import { useNavigate } from "react-router-dom";
+import {
+  Mail,
+  Inbox,
+  Send,
+  FileText,
+  Archive,
+  Clock,
+  AlertCircle,
+  Trash2,
+  Phone,
+  MessageSquare,
+  Settings,
+  Zap,
+  CheckCircle,
+  Menu,
+  RefreshCw,
+  LogOut,
+  Star,
+  Search,
+} from "lucide-react";
 
 export default function Dashboard() {
+  const navigate = useNavigate();
+  const backendURL = "https://e49460d69e43.ngrok-free.app";
+
   const [user, setUser] = useState(null);
   const [gmailConnected, setGmailConnected] = useState(false);
+  const [connectedGmail, setConnectedGmail] = useState(null);
   const [emails, setEmails] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [selectedEmail, setSelectedEmail] = useState(null);
+  const [selectedCategory, setSelectedCategory] = useState("inbox");
 
-  useEffect(() => {
-    const fetchUser = async () => {
-      const { data } = await supabase.auth.getUser();
-      if (data?.user) {
-        setUser(data.user);
-        checkGmailConnection(data.user.id);
+  // ✅ Format email timestamps like Gmail
+  const formatEmailTime = (dateString) => {
+    if (!dateString) return "Now";
+    try {
+      const emailDate = new Date(dateString);
+      const now = new Date();
+      const diffMs = now - emailDate;
+      const diffMins = Math.floor(diffMs / 60000);
+      const diffHours = Math.floor(diffMs / 3600000);
+      const diffDays = Math.floor(diffMs / 86400000);
+
+      if (diffDays === 0) {
+        if (diffMins < 1) return "Just now";
+        if (diffMins < 60) return `${diffMins}m ago`;
+        const hours = emailDate.getHours();
+        const minutes = emailDate.getMinutes();
+        const ampm = hours >= 12 ? "PM" : "AM";
+        const displayHours = hours % 12 || 12;
+        return `${displayHours}:${minutes.toString().padStart(2, "0")} ${ampm}`;
       }
-    };
-    fetchUser();
-
-    // ✅ Listen for popup message from backend
-    const handleMessage = (event) => {
-      if (event.data.gmailConnected) {
-        setGmailConnected(true);
-        console.log("✅ Gmail connected (received from popup)");
-        fetchInbox();
+      if (diffDays === 1) return "Yesterday";
+      if (diffDays < 7) {
+        const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+        return days[emailDate.getDay()];
       }
-    };
-
-    window.addEventListener("message", handleMessage);
-    return () => window.removeEventListener("message", handleMessage);
-  }, []);
-
-  // ✅ Check if user already has a Gmail token
-  const checkGmailConnection = async (user_id) => {
-    const { data } = await supabase
-      .from("gmail_tokens")
-      .select("refresh_token")
-      .eq("user_id", user_id)
-      .single();
-
-    if (data && data.refresh_token) {
-      setGmailConnected(true);
-      console.log("✅ Gmail connected");
-      fetchInbox(); // auto fetch inbox when already connected
-    } else {
-      console.log("⚠️ Gmail not connected");
+      const month = emailDate.toLocaleString("en-US", { month: "short" });
+      const day = emailDate.getDate();
+      return `${month} ${day}`;
+    } catch {
+      return "Now";
     }
   };
 
-  // ✅ Open Gmail connect popup
+  // ✅ Restore Supabase session + Gmail state automatically
+  useEffect(() => {
+    const restoreSession = async () => {
+      // ✅ Wait for Supabase to restore the session first
+      const { data, error } = await supabase.auth.getSession();
+      const session = data?.session;
+  
+      if (session?.user) {
+        console.log("✅ Supabase session restored:", session.user.email);
+        setUser(session.user);
+        localStorage.setItem("user", JSON.stringify(session.user));
+  
+        // ⏳ Add a short wait to ensure Supabase loads table permissions
+        setTimeout(() => {
+          checkGmailConnection(session.user.id);
+        }, 600);
+      } else {
+        const savedUser = localStorage.getItem("user");
+        if (savedUser) {
+          const parsedUser = JSON.parse(savedUser);
+          setUser(parsedUser);
+          console.log("✅ Local user restored:", parsedUser.email);
+          setTimeout(() => {
+            checkGmailConnection(parsedUser.id);
+          }, 600);
+        }
+      }
+    };
+  
+    restoreSession();
+  
+    // ✅ Re-run if auth state changes (login, logout, refresh)
+    const { data: listener } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (session?.user) {
+          setUser(session.user);
+          localStorage.setItem("user", JSON.stringify(session.user));
+          console.log("🔄 Auth state changed: user active");
+          setTimeout(() => {
+            checkGmailConnection(session.user.id);
+          }, 600);
+        } else {
+          console.log("🚪 Logged out");
+          localStorage.removeItem("user");
+          setUser(null);
+          setGmailConnected(false);
+          navigate("/");
+        }
+      }
+    );
+  
+    // ✅ Gmail popup listener
+    const handleMessage = (event) => {
+      if (event.data.gmailConnected) {
+        console.log("📬 Gmail connection message received");
+        setGmailConnected(true);
+        fetchInbox();
+      }
+    };
+    window.addEventListener("message", handleMessage);
+  
+    return () => {
+      window.removeEventListener("message", handleMessage);
+      listener?.subscription.unsubscribe();
+    };
+  }, []);
+  
+  
+
+  // ✅ Check Gmail token
+  const checkGmailConnection = async (user_id) => {
+    try {
+      const { data, error } = await supabase
+        .from("gmail_tokens")
+        .select("refresh_token, gmail_email")
+        .eq("user_id", user_id)
+        .single();
+
+      if (error && error.code === "PGRST116") {
+        setGmailConnected(false);
+        return;
+      }
+
+      if (data?.refresh_token) {
+        setGmailConnected(true);
+        setConnectedGmail(data.gmail_email);
+        fetchInbox();
+      } else setGmailConnected(false);
+    } catch (err) {
+      console.error("❌ Error checking Gmail:", err);
+      setGmailConnected(false);
+    }
+  };
+
+  // ✅ Connect Gmail (only once)
   const connectGmail = () => {
-    const backendURL = "https://e49460d69e43.ngrok-free.app";
     const user_id = user?.id;
-    if (!user_id) return alert("User not logged in!");
+    if (!user_id) return alert("Please login first!");
+
     window.open(
       `${backendURL}/auth/google?user_id=${user_id}`,
       "_blank",
       "width=500,height=600"
     );
 
-    // Optional: Poll for changes after popup closes
     const poll = setInterval(async () => {
       const { data } = await supabase
         .from("gmail_tokens")
-        .select("refresh_token")
+        .select("refresh_token, gmail_email")
         .eq("user_id", user_id)
         .single();
-      if (data && data.refresh_token) {
+
+      if (data?.refresh_token) {
         setGmailConnected(true);
+        setConnectedGmail(data.gmail_email);
         clearInterval(poll);
         fetchInbox();
       }
     }, 3000);
   };
 
-  // ✅ Fetch inbox emails
+  // ✅ Fetch Inbox
   const fetchInbox = async () => {
     if (!user) return;
     setLoading(true);
-
     try {
-      const res = await fetch(
-        `https://e49460d69e43.ngrok-free.app/gmail/inbox/${user.id}`
-      );
+      const res = await fetch(`${backendURL}/gmail/inbox/${user.id}`, {
+        headers: {
+          Accept: "application/json",
+          "ngrok-skip-browser-warning": "true",
+        },
+      });
+      const data = await res.json();
 
-      const text = await res.text();
-      try {
-        const data = JSON.parse(text);
-        if (data.success) {
-          setEmails(data.emails);
-          console.log("📩 Emails fetched:", data.emails);
-        } else {
-          console.error("⚠️ Backend error:", data.error || data);
-        }
-      } catch (parseErr) {
-        console.error("❌ Backend returned non-JSON response:", text);
-      }
+      if (data.success) {
+        const withTime = data.emails.map((email) => ({
+          ...email,
+          date:
+            email.internalDate ||
+            new Date().toISOString(),
+        }));
+        setEmails(withTime);
+      } else console.error("⚠️ Error fetching inbox:", data.error);
     } catch (err) {
-      console.error("Fetch inbox failed:", err);
+      console.error("❌ Fetch inbox failed:", err);
     }
-
     setLoading(false);
   };
 
+  // ✅ Logout
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    localStorage.removeItem("user");
+    navigate("/");
+  };
+
+  const categories = [
+    { name: "Inbox", icon: <Inbox size={20} />, count: emails.length },
+    { name: "Drafts", icon: <FileText size={20} />, count: 0 },
+    { name: "Sent", icon: <Send size={20} />, count: 0 },
+  ];
+
+  const managementCategories = [
+    { name: "Archive", icon: <Archive size={20} /> },
+    { name: "Snoozed", icon: <Clock size={20} /> },
+    { name: "Spam", icon: <AlertCircle size={20} /> },
+    { name: "Bin", icon: <Trash2 size={20} /> },
+  ];
+
   return (
-    <div className="min-h-screen bg-gradient-to-b from-black via-slate-900 to-slate-950 text-white flex flex-col items-center py-12 px-4">
-      <div className="max-w-3xl w-full">
-        {/* Header */}
-        <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold tracking-tight">📨 Dashboard</h1>
-          {user && (
-            <div className="text-sm text-slate-400">
-              Logged in as <span className="text-blue-400">{user.email}</span>
+    <div className="flex h-screen bg-[#0a0a0a] text-white">
+      {/* Sidebar */}
+      <aside className="w-64 bg-[#141414] border-r border-slate-800 flex flex-col">
+        {/* Profile */}
+        <div className="p-4 border-b border-slate-800 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                <span className="text-white font-bold text-sm">
+                  {user?.email?.charAt(0).toUpperCase()}
+                </span>
+              </div>
+              <div
+                className={`absolute bottom-0 right-0 w-3 h-3 ${
+                  gmailConnected ? "bg-green-500" : "bg-slate-600"
+                } rounded-full border-2 border-[#141414]`}
+              ></div>
             </div>
-          )}
+            <div>
+              <p className="text-sm font-medium">
+                {user?.email?.split("@")[0] || "User"}
+              </p>
+              <p className="text-xs text-slate-400 truncate">
+                {connectedGmail || "No Gmail Linked"}
+              </p>
+            </div>
+          </div>
+          <button onClick={handleLogout} className="text-slate-400 hover:text-white">
+            <LogOut size={16} />
+          </button>
         </div>
 
-        {/* Connect or Fetch Buttons */}
-        {!gmailConnected ? (
-          <div className="text-center mt-10">
-            <button
-              onClick={connectGmail}
-              className="px-6 py-3 bg-blue-600 hover:bg-blue-700 rounded-xl text-white font-medium text-lg shadow-lg shadow-blue-500/25 transition-all"
-            >
-              🔗 Connect Gmail
-            </button>
-            <p className="text-slate-400 text-sm mt-3">
-              Connect your Gmail to start fetching inbox emails.
-            </p>
+        {/* Gmail connection */}
+        {gmailConnected ? (
+          <div className="px-4 py-2 bg-green-500/10 border-b border-slate-800">
+            <div className="flex items-center gap-2 text-green-500">
+              <CheckCircle size={14} />
+              <span className="text-xs">Gmail Connected</span>
+            </div>
+            <p className="text-xs text-slate-400 mt-0.5 truncate">{connectedGmail}</p>
           </div>
         ) : (
-          <div className="flex flex-col items-center gap-4">
+          <div className="px-4 py-3 border-b border-slate-800">
+            <button
+              onClick={connectGmail}
+              className="w-full flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm font-medium"
+            >
+              <Mail size={16} />
+              <span>Connect Gmail</span>
+            </button>
+          </div>
+        )}
+
+        {/* Sidebar Buttons */}
+        <div className="px-8 py-3 border-b border-slate-800">
+          <button className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-xl font-medium transition-all shadow-lg shadow-blue-500/25">
+            <Mail size={14} />
+            <span>New Email</span>
+          </button>
+        </div>
+
+        <nav className="flex-1 px-3 py-2 overflow-y-auto">
+          <p className="px-3 text-xs font-semibold text-slate-500 mb-2">Core</p>
+          {categories.map((c) => (
+            <button
+              key={c.name}
+              onClick={() => {
+                setSelectedCategory(c.name.toLowerCase());
+                if (c.name === "Inbox" && gmailConnected) fetchInbox();
+              }}
+              className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-all ${
+                selectedCategory === c.name.toLowerCase()
+                  ? "bg-slate-800 text-white"
+                  : "text-slate-400 hover:bg-slate-800/50 hover:text-white"
+              }`}
+            >
+              <div className="flex items-center gap-3">{c.icon}<span>{c.name}</span></div>
+              {c.count > 0 && (
+                <span className="text-xs bg-slate-800 px-2 py-0.5 rounded-full">
+                  {c.count}
+                </span>
+              )}
+            </button>
+          ))}
+          <p className="px-3 text-xs font-semibold text-slate-500 mt-4 mb-2">Management</p>
+          {managementCategories.map((m) => (
+            <button
+              key={m.name}
+              className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-slate-400 hover:bg-slate-800/50 hover:text-white transition-all"
+            >
+              <div className="flex items-center gap-3">{m.icon}<span className="text-sm">{m.name}</span></div>
+            </button>
+          ))}
+        </nav>
+      </aside>
+
+      {/* Main Content */}
+      <main className="flex-1 flex flex-col">
+        {/* Header */}
+        <header className="h-16 px-6 border-b border-slate-800 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Menu size={20} className="text-slate-400" />
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+              <input
+                type="text"
+                placeholder="Search"
+                className="w-96 pl-10 pr-4 py-2 bg-[#1a1a1a] border border-slate-800 rounded-lg text-sm text-white placeholder-slate-500"
+              />
+            </div>
+          </div>
+          {gmailConnected && (
             <button
               onClick={fetchInbox}
               disabled={loading}
-              className={`px-6 py-3 rounded-xl font-medium text-white transition-all ${
-                loading
-                  ? "bg-slate-700 cursor-not-allowed"
-                  : "bg-green-600 hover:bg-green-700 shadow-lg shadow-green-500/25"
-              }`}
+              className="flex items-center gap-2 px-3 py-1.5 text-sm text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg"
             >
-              {loading ? "Fetching Inbox..." : "📬 Fetch My Inbox"}
+              <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
+              Refresh
             </button>
-          </div>
-        )}
+          )}
+        </header>
 
-        {/* Loading Message */}
-        {loading && (
-          <p className="text-slate-400 mt-6 text-center animate-pulse">
-            Fetching your latest emails...
-          </p>
-        )}
-
-        {/* Inbox Section */}
-        {emails.length > 0 && (
-          <div className="mt-10">
-            <h2 className="text-xl font-semibold mb-4 border-b border-slate-700 pb-2">
-              Your Latest Emails
-            </h2>
-            <div className="space-y-4">
-              {emails.map((email) => (
-                <div
-                  key={email.id}
-                  className="bg-slate-800/50 p-4 rounded-xl border border-slate-700/50 hover:bg-slate-800 transition-all cursor-pointer"
+        {/* Email List */}
+        <div className="flex-1 flex">
+          <div className="w-96 border-r border-slate-800 overflow-y-auto">
+            {!gmailConnected ? (
+              <div className="flex flex-col items-center justify-center h-full text-center">
+                <Mail size={36} className="text-slate-500 mb-4" />
+                <h3 className="text-lg font-semibold">Connect Gmail</h3>
+                <p className="text-sm text-slate-400 mb-6">
+                  Connect Gmail to manage your inbox
+                </p>
+                <button
+                  onClick={connectGmail}
+                  className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 rounded-lg font-medium"
                 >
-                  <p className="font-semibold text-blue-400">{email.subject}</p>
-                  <p className="text-sm text-slate-300 mt-1">{email.from}</p>
-                  <p className="text-xs text-slate-500 mt-1 line-clamp-2">
-                    {email.snippet}
+                  Connect Gmail
+                </button>
+              </div>
+            ) : loading ? (
+              <div className="flex justify-center items-center h-full">
+                <div className="animate-spin h-12 w-12 border-2 border-blue-500 border-t-transparent rounded-full"></div>
+              </div>
+            ) : (
+              <>
+                <div className="px-4 py-3 border-b border-slate-800">
+                  <p className="text-sm text-slate-400">
+                    {emails.length} {emails.length === 1 ? "email" : "emails"}
                   </p>
                 </div>
-              ))}
-            </div>
+                {emails.map((email, i) => (
+                  <button
+                    key={email.id || i}
+                    onClick={() => setSelectedEmail(email)}
+                    className={`w-full p-4 border-b border-slate-800 hover:bg-slate-900/50 text-left ${
+                      selectedEmail?.id === email.id ? "bg-slate-900/50" : ""
+                    }`}
+                  >
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-sm font-semibold">
+                        {email.from?.charAt(0)?.toUpperCase() || "?"}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex justify-between text-sm mb-1">
+                          <p className="font-semibold truncate">{email.from}</p>
+                          <span className="text-xs text-slate-500">
+                            {formatEmailTime(email.date)}
+                          </span>
+                        </div>
+                        <p className="truncate text-slate-300">
+                          {email.subject || "(No Subject)"}
+                        </p>
+                        <p className="text-xs text-slate-500 truncate">
+                          {email.snippet || "No preview available"}
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </>
+            )}
           </div>
-        )}
 
-        {/* Empty State */}
-        {gmailConnected && !loading && emails.length === 0 && (
-          <p className="text-slate-500 text-center mt-10">
-            No recent emails found in your inbox.
-          </p>
-        )}
-      </div>
+          {/* Email Details */}
+          <div className="flex-1 flex items-center justify-center">
+            {!selectedEmail ? (
+              <div className="text-center">
+                <Mail size={48} className="text-slate-600 mb-4 mx-auto" />
+                <p className="text-slate-400 text-sm">Select an email to view details</p>
+              </div>
+            ) : (
+              <div className="max-w-3xl p-8 text-sm">
+                <h2 className="text-lg font-semibold mb-2">{selectedEmail.subject}</h2>
+                <p className="text-slate-400 mb-3">
+                  From: {selectedEmail.from} | {formatEmailTime(selectedEmail.date)}
+                </p>
+                <div className="border-t border-slate-800 pt-3 text-slate-300 leading-relaxed">
+                  {selectedEmail.snippet || "No content available"}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </main>
     </div>
   );
 }
