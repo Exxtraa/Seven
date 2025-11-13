@@ -20,6 +20,7 @@ import {
   LogOut,
   Star,
   Search,
+  Building2,
 } from "lucide-react";
 
 export default function Dashboard() {
@@ -42,7 +43,6 @@ export default function Dashboard() {
       const now = new Date();
       const diffMs = now - emailDate;
       const diffMins = Math.floor(diffMs / 60000);
-      const diffHours = Math.floor(diffMs / 3600000);
       const diffDays = Math.floor(diffMs / 86400000);
 
       if (diffDays === 0) {
@@ -70,16 +70,13 @@ export default function Dashboard() {
   // ✅ Restore Supabase session + Gmail state automatically
   useEffect(() => {
     const restoreSession = async () => {
-      // ✅ Wait for Supabase to restore the session first
-      const { data, error } = await supabase.auth.getSession();
+      const { data } = await supabase.auth.getSession();
       const session = data?.session;
-  
+
       if (session?.user) {
         console.log("✅ Supabase session restored:", session.user.email);
         setUser(session.user);
         localStorage.setItem("user", JSON.stringify(session.user));
-  
-        // ⏳ Add a short wait to ensure Supabase loads table permissions
         setTimeout(() => {
           checkGmailConnection(session.user.id);
         }, 600);
@@ -95,10 +92,10 @@ export default function Dashboard() {
         }
       }
     };
-  
+
     restoreSession();
-  
-    // ✅ Re-run if auth state changes (login, logout, refresh)
+
+    // ✅ Re-run if auth state changes (login/logout/refresh)
     const { data: listener } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         if (session?.user) {
@@ -117,24 +114,22 @@ export default function Dashboard() {
         }
       }
     );
-  
-    // ✅ Gmail popup listener
-    const handleMessage = (event) => {
+
+    // ✅ Gmail popup listener (auto fetch after connect)
+    const handleMessage = async (event) => {
       if (event.data.gmailConnected) {
         console.log("📬 Gmail connection message received");
         setGmailConnected(true);
-        fetchInbox();
+        await fetchInbox(); // 🔥 Auto-fetch inbox immediately after connecting
       }
     };
     window.addEventListener("message", handleMessage);
-  
+
     return () => {
       window.removeEventListener("message", handleMessage);
       listener?.subscription.unsubscribe();
     };
   }, []);
-  
-  
 
   // ✅ Check Gmail token
   const checkGmailConnection = async (user_id) => {
@@ -183,17 +178,42 @@ export default function Dashboard() {
         setGmailConnected(true);
         setConnectedGmail(data.gmail_email);
         clearInterval(poll);
-        fetchInbox();
+        await fetchInbox(); // 🔥 Auto-load inbox when connected
       }
     }, 3000);
   };
 
-  // ✅ Fetch Inbox
-  const fetchInbox = async () => {
-    if (!user) return;
+  // ✅ Fetch Inbox — accepts optional userParam to avoid race with state
+  const fetchInbox = async (userParam) => {
+    const effectiveUser = userParam || user;
+    if (!effectiveUser) {
+      // try to restore session quickly if possible
+      try {
+        const { data } = await supabase.auth.getSession();
+        if (data?.session?.user) {
+          setUser(data.session.user);
+        } else {
+          const stored = localStorage.getItem("user");
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            setUser(parsed);
+          }
+        }
+      } catch (err) {
+        console.error("❌ session restore failed before fetchInbox:", err);
+      }
+    }
+
+    const usedUser =
+      userParam || (user ?? JSON.parse(localStorage.getItem("user") || "null"));
+    if (!usedUser) {
+      console.warn("⚠️ fetchInbox: no user available to fetch for");
+      return;
+    }
+
     setLoading(true);
     try {
-      const res = await fetch(`${backendURL}/gmail/inbox/${user.id}`, {
+      const res = await fetch(`${backendURL}/gmail/inbox/${usedUser.id}`, {
         headers: {
           Accept: "application/json",
           "ngrok-skip-browser-warning": "true",
@@ -204,16 +224,15 @@ export default function Dashboard() {
       if (data.success) {
         const withTime = data.emails.map((email) => ({
           ...email,
-          date:
-            email.internalDate ||
-            new Date().toISOString(),
+          date: email.internalDate || new Date().toISOString(),
         }));
         setEmails(withTime);
       } else console.error("⚠️ Error fetching inbox:", data.error);
     } catch (err) {
       console.error("❌ Fetch inbox failed:", err);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   // ✅ Logout
@@ -243,6 +262,158 @@ export default function Dashboard() {
         {/* Profile */}
         <div className="p-4 border-b border-slate-800 flex items-center justify-between">
           <div className="flex items-center gap-3">
+            <div className="text-3xl ml-11 font-bold text-white flex flex-col items-center leading-none">
+              <span>Seven</span>
+            </div>
+          </div>
+          <button
+            onClick={handleLogout}
+            className="text-slate-400 hover:text-white mr-1 mt-2"
+          >
+            <LogOut size={18} />
+          </button>
+        </div>
+
+        {/* Gmail connection
+        {gmailConnected ? (
+          <div className="px-4 py-2 bg-green-500/10 border-b border-slate-800">
+            <div className="flex items-center gap-2 text-green-500">
+              <CheckCircle size={14} />
+              <span className="text-xs">Gmail Connected</span>
+            </div>
+            <p className="text-xs text-slate-400 mt-0.5 truncate">{connectedGmail}</p>
+          </div>
+        ) : (
+          <div className="px-4 py-3 border-b border-slate-800">
+            <button
+              onClick={connectGmail}
+              className="w-full flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm font-medium"
+            >
+              <Mail size={16} />
+              <span>Connect Gmail</span>
+            </button>
+          </div>
+        )} */}
+
+        {/* Sidebar Menu */}
+        <nav className="flex-1 px-3 py-2 overflow-y-auto">
+          <div className="flex items-center gap-3 mt-2">
+            <div className="relative">
+              <Search
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500"
+                size={16}
+              />
+              <input
+                type="text"
+                placeholder="Search"
+                className="w-57 pl-10 pr-4 py-2 bg-[#1a1a1a] border border-slate-800 rounded-lg text-sm text-white placeholder-slate-500"
+              />
+            </div>
+          </div>
+
+          <button
+            className={`w-full mt-4 flex items-center justify-start gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+              selectedCategory === "dashboard"
+                ? "bg-slate-800 text-white"
+                : "text-slate-400 hover:bg-slate-800/50 hover:text-white"
+            }`}
+            onClick={() => setSelectedCategory("dashboard")}
+          >
+            <Menu size={18} />
+            <span>Dashboard</span>
+          </button>
+
+          <div className="mt-4">
+            <p className="px-3 text-xs font-semibold text-slate-500 mb-2">
+              Manage
+            </p>
+
+            <button
+              className={`w-full flex items-center justify-start gap-3 px-3 py-2 rounded-lg text-sm transition-all ${
+                selectedCategory === "manage connection"
+                  ? "bg-slate-800 text-white"
+                  : "text-slate-400 hover:bg-slate-800/50 hover:text-white"
+              }`}
+              onClick={() => setSelectedCategory("manage connection")}
+            >
+              <Settings size={18} />
+              <span>Connections</span>
+            </button>
+
+            <button
+              className={`w-full flex items-center justify-start gap-3 px-3 py-2 rounded-lg text-sm transition-all ${
+                selectedCategory === "companies"
+                  ? "bg-slate-800 text-white"
+                  : "text-slate-400 hover:bg-slate-800/50 hover:text-white"
+              }`}
+              onClick={() => setSelectedCategory("companies")}
+            >
+              <Building2 size={18} />
+              <span>Companies</span>
+            </button>
+          </div>
+
+          <div className="mt-4">
+            <p className="px-3 text-xs font-semibold text-slate-500 mb-2">
+              Engage
+            </p>
+
+            <button
+              className={`w-full flex items-center justify-start gap-3 px-3 py-2 rounded-lg text-sm transition-all ${
+                selectedCategory === "sent"
+                  ? "bg-slate-800 text-white"
+                  : "text-slate-400 hover:bg-slate-800/50 hover:text-white"
+              }`}
+              onClick={() => setSelectedCategory("sent")}
+            >
+              <Send size={18} />
+              <span>Lead Sent</span>
+            </button>
+
+            <button
+              className={`w-full flex items-center justify-start gap-3 px-3 py-2 rounded-lg text-sm transition-all ${
+                selectedCategory === "scheduled"
+                  ? "bg-slate-800 text-white"
+                  : "text-slate-400 hover:bg-slate-800/50 hover:text-white"
+              }`}
+              onClick={() => setSelectedCategory("scheduled")}
+            >
+              <Clock size={18} />
+              <span>Scheduled</span>
+            </button>
+
+            <button
+              className={`w-full flex items-center justify-start gap-3 px-3 py-2 rounded-lg text-sm transition-all ${
+                selectedCategory === "inbox"
+                  ? "bg-slate-800 text-white"
+                  : "text-slate-400 hover:bg-slate-800/50 hover:text-white"
+              }`}
+              onClick={() => {
+                setSelectedCategory("inbox");
+                if (gmailConnected) fetchInbox();
+              }}
+            >
+              <Inbox size={18} />
+              <span>Inbox</span>
+            </button>
+
+            <button
+              className={`w-full flex items-center justify-start gap-3 px-3 py-2 rounded-lg text-sm transition-all ${
+                selectedCategory === "bin"
+                  ? "bg-slate-800 text-white"
+                  : "text-slate-400 hover:bg-slate-800/50 hover:text-white"
+              }`}
+              onClick={() => setSelectedCategory("bin")}
+            >
+              <Trash2 size={18} />
+              <span>Bin</span>
+            </button>
+          </div>
+        </nav>
+
+        {/* Profile */}
+        <div className="p-4 border-b border-slate-800 flex items-center justify-between">
+          <div className="flex items-center gap-3">
             <div className="relative">
               <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
                 <span className="text-white font-bold text-sm">
@@ -264,90 +435,13 @@ export default function Dashboard() {
               </p>
             </div>
           </div>
-          <button onClick={handleLogout} className="text-slate-400 hover:text-white">
-            <LogOut size={16} />
-          </button>
         </div>
-
-        {/* Gmail connection */}
-        {gmailConnected ? (
-          <div className="px-4 py-2 bg-green-500/10 border-b border-slate-800">
-            <div className="flex items-center gap-2 text-green-500">
-              <CheckCircle size={14} />
-              <span className="text-xs">Gmail Connected</span>
-            </div>
-            <p className="text-xs text-slate-400 mt-0.5 truncate">{connectedGmail}</p>
-          </div>
-        ) : (
-          <div className="px-4 py-3 border-b border-slate-800">
-            <button
-              onClick={connectGmail}
-              className="w-full flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm font-medium"
-            >
-              <Mail size={16} />
-              <span>Connect Gmail</span>
-            </button>
-          </div>
-        )}
-
-        {/* Sidebar Buttons */}
-        <div className="px-8 py-3 border-b border-slate-800">
-          <button className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-xl font-medium transition-all shadow-lg shadow-blue-500/25">
-            <Mail size={14} />
-            <span>New Email</span>
-          </button>
-        </div>
-
-        <nav className="flex-1 px-3 py-2 overflow-y-auto">
-          <p className="px-3 text-xs font-semibold text-slate-500 mb-2">Core</p>
-          {categories.map((c) => (
-            <button
-              key={c.name}
-              onClick={() => {
-                setSelectedCategory(c.name.toLowerCase());
-                if (c.name === "Inbox" && gmailConnected) fetchInbox();
-              }}
-              className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-all ${
-                selectedCategory === c.name.toLowerCase()
-                  ? "bg-slate-800 text-white"
-                  : "text-slate-400 hover:bg-slate-800/50 hover:text-white"
-              }`}
-            >
-              <div className="flex items-center gap-3">{c.icon}<span>{c.name}</span></div>
-              {c.count > 0 && (
-                <span className="text-xs bg-slate-800 px-2 py-0.5 rounded-full">
-                  {c.count}
-                </span>
-              )}
-            </button>
-          ))}
-          <p className="px-3 text-xs font-semibold text-slate-500 mt-4 mb-2">Management</p>
-          {managementCategories.map((m) => (
-            <button
-              key={m.name}
-              className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-slate-400 hover:bg-slate-800/50 hover:text-white transition-all"
-            >
-              <div className="flex items-center gap-3">{m.icon}<span className="text-sm">{m.name}</span></div>
-            </button>
-          ))}
-        </nav>
       </aside>
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col">
         {/* Header */}
         <header className="h-16 px-6 border-b border-slate-800 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Menu size={20} className="text-slate-400" />
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
-              <input
-                type="text"
-                placeholder="Search"
-                className="w-96 pl-10 pr-4 py-2 bg-[#1a1a1a] border border-slate-800 rounded-lg text-sm text-white placeholder-slate-500"
-              />
-            </div>
-          </div>
           {gmailConnected && (
             <button
               onClick={fetchInbox}
@@ -426,13 +520,18 @@ export default function Dashboard() {
             {!selectedEmail ? (
               <div className="text-center">
                 <Mail size={48} className="text-slate-600 mb-4 mx-auto" />
-                <p className="text-slate-400 text-sm">Select an email to view details</p>
+                <p className="text-slate-400 text-sm">
+                  Select an email to view details
+                </p>
               </div>
             ) : (
               <div className="max-w-3xl p-8 text-sm">
-                <h2 className="text-lg font-semibold mb-2">{selectedEmail.subject}</h2>
+                <h2 className="text-lg font-semibold mb-2">
+                  {selectedEmail.subject}
+                </h2>
                 <p className="text-slate-400 mb-3">
-                  From: {selectedEmail.from} | {formatEmailTime(selectedEmail.date)}
+                  From: {selectedEmail.from} |{" "}
+                  {formatEmailTime(selectedEmail.date)}
                 </p>
                 <div className="border-t border-slate-800 pt-3 text-slate-300 leading-relaxed">
                   {selectedEmail.snippet || "No content available"}
