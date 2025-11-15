@@ -98,6 +98,16 @@ export default function Dashboard() {
 
     restoreSession();
 
+    // Tabs stayed where it was last opened 
+    const savedScreen = localStorage.getItem("activeScreen");
+    if (savedScreen) {
+      setActiveScreen(savedScreen);
+    }
+
+    //Load the saved category from localStorage 
+    const savedCategory = localStorage.getItem("selectedCategory");
+    if (savedCategory) setSelectedCategory(savedCategory);
+
     // ✅ Re-run if auth state changes (login/logout/refresh)
     const { data: listener } = supabase.auth.onAuthStateChange(
       async (event, session) => {
@@ -277,27 +287,6 @@ export default function Dashboard() {
           </button>
         </div>
 
-        {/* Gmail connection
-        {gmailConnected ? (
-          <div className="px-4 py-2 bg-green-500/10 border-b border-slate-800">
-            <div className="flex items-center gap-2 text-green-500">
-              <CheckCircle size={14} />
-              <span className="text-xs">Gmail Connected</span>
-            </div>
-            <p className="text-xs text-slate-400 mt-0.5 truncate">{connectedGmail}</p>
-          </div>
-        ) : (
-          <div className="px-4 py-3 border-b border-slate-800">
-            <button
-              onClick={connectGmail}
-              className="w-full flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm font-medium"
-            >
-              <Mail size={16} />
-              <span>Connect Gmail</span>
-            </button>
-          </div>
-        )} */}
-
         {/* Sidebar Menu */}
         <nav className="flex-1 px-3 py-2 overflow-y-auto">
           <div className="flex items-center gap-3 mt-2">
@@ -315,11 +304,16 @@ export default function Dashboard() {
           </div>
 
           <button
-            onClick={() => {
-              setActiveScreen("dashboard");
-              setShowDashboardHome(true);
-              setSelectedEmail(null);
-            }}
+           onClick={() => {
+            setSelectedCategory("dashboard");
+            localStorage.setItem("selectedCategory", "dashboard");
+          
+            setActiveScreen("dashboard");
+            setShowDashboardHome(true);
+            setSelectedEmail(null);
+          }}
+          
+            
             className={`w-full mt-4 flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${
               selectedCategory === "dashboard"
                 ? "bg-slate-800 text-white"
@@ -395,12 +389,18 @@ export default function Dashboard() {
                   ? "bg-slate-800 text-white"
                   : "text-slate-400 hover:bg-slate-800/50 hover:text-white"
               }`}
+              //This onclick is needed every button cuz without it no auto tracking and also no proper button open 
               onClick={() => {
-                setActiveScreen("inbox"); // <-- Switch screen
-                setShowDashboardHome(false);
                 setSelectedCategory("inbox");
+                localStorage.setItem("selectedCategory", "inbox");
+              
+                setActiveScreen("inbox");
+                setShowDashboardHome(false);
+                setSelectedEmail(null);
                 if (gmailConnected) fetchInbox();
               }}
+              
+              
             >
               <Inbox size={18} />
               <span>Inbox</span>
