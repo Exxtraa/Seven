@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import Analytics from "./Analytics";
 import { supabase } from "../supabaseClient";
 import { useNavigate } from "react-router-dom";
 import {
@@ -28,6 +29,8 @@ export default function Dashboard() {
   const backendURL = "https://e49460d69e43.ngrok-free.app";
 
   const [user, setUser] = useState(null);
+  const [activeScreen, setActiveScreen] = useState("inbox");
+  const [showDashboardHome, setShowDashboardHome] = useState(true);
   const [gmailConnected, setGmailConnected] = useState(false);
   const [connectedGmail, setConnectedGmail] = useState(null);
   const [emails, setEmails] = useState([]);
@@ -312,14 +315,18 @@ export default function Dashboard() {
           </div>
 
           <button
-            className={`w-full mt-4 flex items-center justify-start gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+            onClick={() => {
+              setActiveScreen("dashboard");
+              setShowDashboardHome(true);
+              setSelectedEmail(null);
+            }}
+            className={`w-full mt-4 flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${
               selectedCategory === "dashboard"
                 ? "bg-slate-800 text-white"
                 : "text-slate-400 hover:bg-slate-800/50 hover:text-white"
             }`}
-            onClick={() => setSelectedCategory("dashboard")}
           >
-            <Menu size={18} />
+            <Menu size={16} />
             <span>Dashboard</span>
           </button>
 
@@ -389,6 +396,8 @@ export default function Dashboard() {
                   : "text-slate-400 hover:bg-slate-800/50 hover:text-white"
               }`}
               onClick={() => {
+                setActiveScreen("inbox"); // <-- Switch screen
+                setShowDashboardHome(false);
                 setSelectedCategory("inbox");
                 if (gmailConnected) fetchInbox();
               }}
@@ -439,10 +448,11 @@ export default function Dashboard() {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col">
+      {/* -------- MAIN CONTENT (Flexible Layout) -------- */}
+      <div className="flex-1 flex flex-col">
         {/* Header */}
         <header className="h-16 px-6 border-b border-slate-800 flex items-center justify-between">
-          {gmailConnected && (
+          {gmailConnected && activeScreen === "inbox" && (
             <button
               onClick={fetchInbox}
               disabled={loading}
@@ -454,93 +464,108 @@ export default function Dashboard() {
           )}
         </header>
 
-        {/* Email List */}
-        <div className="flex-1 flex">
-          <div className="w-96 border-r border-slate-800 overflow-y-auto">
-            {!gmailConnected ? (
-              <div className="flex flex-col items-center justify-center h-full text-center">
-                <Mail size={36} className="text-slate-500 mb-4" />
-                <h3 className="text-lg font-semibold">Connect Gmail</h3>
-                <p className="text-sm text-slate-400 mb-6">
-                  Connect Gmail to manage your inbox
-                </p>
-                <button
-                  onClick={connectGmail}
-                  className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 rounded-lg font-medium"
-                >
-                  Connect Gmail
-                </button>
-              </div>
-            ) : loading ? (
-              <div className="flex justify-center items-center h-full">
-                <div className="animate-spin h-12 w-12 border-2 border-blue-500 border-t-transparent rounded-full"></div>
-              </div>
-            ) : (
-              <>
-                <div className="px-4 py-3 border-b border-slate-800">
-                  <p className="text-sm text-slate-400">
-                    {emails.length} {emails.length === 1 ? "email" : "emails"}
+        {/* -------- DASHBOARD FULL SCREEN -------- */}
+        {activeScreen === "dashboard" && (
+          <div className="w-full h-full p-10 overflow-y-auto">
+            <Analytics />
+          </div>
+        )}
+
+        {/* -------- INBOX SCREEN (2 columns) -------- */}
+        {activeScreen === "inbox" && (
+          <div className="flex flex-1">
+            {/* LEFT: Inbox email list */}
+            <div className="w-96 border-r border-slate-800 overflow-y-auto">
+              {!gmailConnected ? (
+                <div className="flex flex-col items-center justify-center h-full text-center">
+                  <Mail size={36} className="text-slate-500 mb-4" />
+                  <h3 className="text-lg font-semibold">Connect Gmail</h3>
+                  <p className="text-sm text-slate-400 mb-6">
+                    Connect Gmail to manage your inbox
+                  </p>
+                  <button
+                    onClick={connectGmail}
+                    className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 rounded-lg font-medium"
+                  >
+                    Connect Gmail
+                  </button>
+                </div>
+              ) : loading ? (
+                <div className="flex justify-center items-center h-full">
+                  <div className="animate-spin h-12 w-12 border-2 border-blue-500 border-t-transparent rounded-full"></div>
+                </div>
+              ) : (
+                <>
+                  <div className="px-4 py-3 border-b border-slate-800">
+                    <p className="text-sm text-slate-400">
+                      {emails.length} {emails.length === 1 ? "email" : "emails"}
+                    </p>
+                  </div>
+
+                  {emails.map((email, i) => (
+                    <button
+                      key={email.id || i}
+                      onClick={() => setSelectedEmail(email)}
+                      className={`w-full p-4 border-b border-slate-800 hover:bg-slate-900/50 text-left ${
+                        selectedEmail?.id === email.id ? "bg-slate-900/50" : ""
+                      }`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-sm font-semibold">
+                          {email.from?.charAt(0)?.toUpperCase() || "?"}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex justify-between text-sm mb-1">
+                            <p className="font-semibold truncate">
+                              {email.from}
+                            </p>
+                            <span className="text-xs text-slate-500">
+                              {formatEmailTime(email.date)}
+                            </span>
+                          </div>
+                          <p className="truncate text-slate-300">
+                            {email.subject || "(No Subject)"}
+                          </p>
+                          <p className="text-xs text-slate-500 truncate">
+                            {email.snippet || "No preview available"}
+                          </p>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </>
+              )}
+            </div>
+
+            {/* RIGHT: Email details */}
+            <div className="flex-1 overflow-y-auto">
+              {!selectedEmail ? (
+                <div className="text-center flex items-center justify-center h-full">
+                  <Mail size={48} className="text-slate-600 mb-4 mx-auto" />
+                  <p className="text-slate-400 text-sm">
+                    Select an email to view details
                   </p>
                 </div>
-                {emails.map((email, i) => (
-                  <button
-                    key={email.id || i}
-                    onClick={() => setSelectedEmail(email)}
-                    className={`w-full p-4 border-b border-slate-800 hover:bg-slate-900/50 text-left ${
-                      selectedEmail?.id === email.id ? "bg-slate-900/50" : ""
-                    }`}
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-sm font-semibold">
-                        {email.from?.charAt(0)?.toUpperCase() || "?"}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex justify-between text-sm mb-1">
-                          <p className="font-semibold truncate">{email.from}</p>
-                          <span className="text-xs text-slate-500">
-                            {formatEmailTime(email.date)}
-                          </span>
-                        </div>
-                        <p className="truncate text-slate-300">
-                          {email.subject || "(No Subject)"}
-                        </p>
-                        <p className="text-xs text-slate-500 truncate">
-                          {email.snippet || "No preview available"}
-                        </p>
-                      </div>
-                    </div>
-                  </button>
-                ))}
-              </>
-            )}
-          </div>
+              ) : (
+                <div className="max-w-3xl p-8 text-sm">
+                  <h2 className="text-lg font-semibold mb-2">
+                    {selectedEmail.subject}
+                  </h2>
 
-          {/* Email Details */}
-          <div className="flex-1 flex items-center justify-center">
-            {!selectedEmail ? (
-              <div className="text-center">
-                <Mail size={48} className="text-slate-600 mb-4 mx-auto" />
-                <p className="text-slate-400 text-sm">
-                  Select an email to view details
-                </p>
-              </div>
-            ) : (
-              <div className="max-w-3xl p-8 text-sm">
-                <h2 className="text-lg font-semibold mb-2">
-                  {selectedEmail.subject}
-                </h2>
-                <p className="text-slate-400 mb-3">
-                  From: {selectedEmail.from} |{" "}
-                  {formatEmailTime(selectedEmail.date)}
-                </p>
-                <div className="border-t border-slate-800 pt-3 text-slate-300 leading-relaxed">
-                  {selectedEmail.snippet || "No content available"}
+                  <p className="text-slate-400 mb-3">
+                    From: {selectedEmail.from} |{" "}
+                    {formatEmailTime(selectedEmail.date)}
+                  </p>
+
+                  <div className="border-t border-slate-800 pt-3 text-slate-300 leading-relaxed">
+                    {selectedEmail.snippet || "No content available"}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
-        </div>
-      </main>
+        )}
+      </div>
     </div>
   );
 }
