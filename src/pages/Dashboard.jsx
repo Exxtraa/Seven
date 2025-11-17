@@ -24,6 +24,7 @@ import {
   LogOut,
   Search,
   Building2,
+  Heart,
 } from "lucide-react";
 
 export default function Dashboard() {
@@ -242,7 +243,8 @@ export default function Dashboard() {
       if (data.success) {
         const withTime = data.emails.map((email) => ({
           ...email,
-          date: email.internalDate || new Date().toISOString(),
+          date: email.date,
+
         }));
         setEmails(withTime);
       } else console.error("⚠️ Error fetching inbox:", data.error);
@@ -271,6 +273,7 @@ export default function Dashboard() {
     { name: "Snoozed", icon: <Clock size={20} /> },
     { name: "Spam", icon: <AlertCircle size={20} /> },
     { name: "Bin", icon: <Trash2 size={20} /> },
+    { name: "Feedback", icon: <Heart size={20} /> },
   ];
 
   return (
@@ -421,6 +424,25 @@ export default function Dashboard() {
               <Trash2 size={18} />
               <span>Bin</span>
             </button>
+
+          </div>
+
+          <div className="mt-4">
+            <p className="px-3 text-xs font-semibold text-slate-500 mb-2">
+              Spreading love
+            </p>
+
+            <button
+              className={`w-full flex items-center justify-start gap-3 px-3 py-2 rounded-lg text-sm transition-all ${
+                selectedCategory === "feedback"
+                  ? "bg-slate-800 text-white"
+                  : "text-slate-400 hover:bg-slate-800/50 hover:text-white"
+              }`}
+              onClick={() => setSelectedCategory("feedback")}
+            >
+              <Heart size={18} />
+              <span>Feedback</span>
+            </button>
           </div>
         </nav>
 
@@ -452,7 +474,6 @@ export default function Dashboard() {
       </aside>
 
       {/* Main Content */}
-      {/* -------- MAIN CONTENT (Flexible Layout) -------- */}
       <div className="flex-1 flex flex-col">
         {/* Header */}
         <header className="h-16 px-6 border-b border-slate-800 flex items-center justify-between">

@@ -1,4 +1,5 @@
 import React from "react";
+import DOMPurify from "dompurify";
 import { Mail } from "lucide-react";
 
 export default function Inbox({
@@ -8,14 +9,12 @@ export default function Inbox({
   selectedEmail,
   setSelectedEmail,
   formatEmailTime,
-  connectGmail
+  connectGmail,
 }) {
   return (
-    <div className="flex flex-1">
-
+    <div className="flex flex-1 overflow-hidden">
       {/* LEFT SIDE — Email List */}
-      <div className="w-96 border-r border-slate-800 overflow-y-auto">
-
+      <div className="w-96 border-r border-slate-800 overflow-y-auto h-full bg-[#0a0a0a]">
         {!gmailConnected ? (
           <div className="flex flex-col items-center justify-center h-full text-center">
             <Mail size={36} className="text-slate-500 mb-4" />
@@ -84,11 +83,10 @@ export default function Inbox({
 
       {/* RIGHT SIDE — Email Details */}
       <div className="flex-1 overflow-y-auto">
-
         {!selectedEmail ? (
           <div className="text-center flex items-center justify-center h-full">
-            <Mail size={48} className="text-slate-600 mb-4 mx-auto" />
-            <p className="text-slate-400 text-sm">
+            <Mail size={48} className="text-slate-600 " />
+            <p className="mr-17 text-slate-400 text-1xl ml-2">
               Select an email to view details
             </p>
           </div>
@@ -99,16 +97,21 @@ export default function Inbox({
             </h2>
 
             <p className="text-slate-400 mb-3">
-              From: {selectedEmail.from} |{" "}
-              {formatEmailTime(selectedEmail.date)}
+              From: {selectedEmail.from} | {formatEmailTime(selectedEmail.date)}
             </p>
 
             <div className="border-t border-slate-800 pt-3 text-slate-300 leading-relaxed">
-              {selectedEmail.snippet || "No content available"}
+              {selectedEmail.htmlBody ? (
+                <div
+                  className="prose prose-invert max-w-none"
+                  dangerouslySetInnerHTML={{ __html: selectedEmail.htmlBody }}
+                ></div>
+              ) : (
+                <p>{selectedEmail.textBody || "No content available"}</p>
+              )}
             </div>
           </div>
         )}
-
       </div>
     </div>
   );
